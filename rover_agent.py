@@ -2,12 +2,19 @@ import paho.mqtt.client as mqtt
 # from your_vision_library import VisionModel  # Placeholder for actual vision model library
 import json
 from openai import OpenAI
+import os
+import base64
+import requests
 
-
+# Function to encode the image
+def encode_image(image_path):
+  with open(image_path, "rb") as image_file:
+    return base64.b64encode(image_file.read()).decode('utf-8')
 
 class Agent:
     def __init__(self, agent_name, mqtt_broker, mqtt_port, topic_prefix):
         self.openai_client = OpenAI()
+        self.openai_client.api_key = os.getenv("OPENAI_API_KEY")
         self.agent_name = agent_name
         self.client = mqtt.Client()
         self.client.connect(mqtt_broker, mqtt_port, 60)
@@ -66,29 +73,38 @@ class Agent:
 
     def upload_images_to_openai(self,images, prompt):
         for image in images:
-            ## this is a hallucinated function that uploads an image to openai and returns the url
-            ## we need to just replace it with using a base64 encoded image
-            ## https://platform.openai.com/docs/guides/vision
-            ## tomorrow I will try to implement this
-            self.openai_client.upload_image(image, prompt)
-            response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                            "type": "image_url",
+            # Getting the base64 string
+            base64_image = encode_image(image)
+
+            headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.openai_client.api_key}",
+            }
+
+            payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                "role": "user",
+                "content": [
+                    {
+                    "type": "text",
+                    "text": prompt
+                    },
+                    {
+                    "type": "image_url",
                         "image_url": {
-                            "url": url,
-                        },
-                        },
-                    ],
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
                     }
-                ],
-                max_tokens=300,
-            )               
+                ]
+                }
+            ],
+            "max_tokens": 300
+            }
+
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            
 
 # Example usage
 agent = Agent("Rover1", "localhost", 1883, "rover/commands")
