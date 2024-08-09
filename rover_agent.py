@@ -1,5 +1,4 @@
 import paho.mqtt.client as mqtt
-# from your_vision_library import VisionModel  # Placeholder for actual vision model library
 import json
 from openai import OpenAI
 import os
@@ -23,8 +22,12 @@ class Agent:
         self.messages = [{"role": "system", "content": "Initialize agent"}]
 
     def observe(self):
-        # Capture a frame from the Twitch stream
-        frame = self.get_twitch_frame()  # Placeholder function
+        ## here's where the "limbic system" of the agent will live
+        ## which will dial up or down the number of times per minuite we capture an image and send it to openai
+        ## we'll need to add some system prompting and rover logic here
+        ## but also figure out which frame number we're on so we can either capture or not capture a frame
+        # Capture a frame from the Camera stream
+        frame = self.get_camera_frame()  # Placeholder function
         # Analyze the frame using the vision model by sending the image to openai and asking it to interpret what it sees and give directions to the next agent to generate the next move
         
         observation = self.upload_images_to_openai([frame], "What do you see? Your response should help the next agent to generate the next move for the rover you are riding on.")
@@ -32,13 +35,17 @@ class Agent:
         return json.dumps(observation)
 
     def orient(self, observation):
-        # Process observation data using GPT-4
+        ## #todo a lot of the business logic of deciding what the next move should be
+        ## in relation to the goals of the agent will live here
+        ## we'll need to add some system prompting and rover logic here
+        # Process observation data using gpt4-o-mini
         self.messages.append({"role": "user", "content": observation})
         response = self.run_agent_step(self.messages)
         return response
 
     def decide(self, orientation):
         # Decide the action based on the orientation
+        # #todo we'll need to add some system prompting and rover logic here
         self.messages.append({"role": "user", "content": orientation})
         decision = self.run_agent_step(self.messages)
         return decision
@@ -58,7 +65,7 @@ class Agent:
             decision = self.decide(orientation)
             exit_loop = self.act(decision)
 
-    def get_twitch_frame(self):
+    def get_camera_frame(self):
         # Interface with Twitch API or capture software to get current video frame
         pass
 
@@ -82,28 +89,29 @@ class Agent:
             }
 
             payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {
-                "role": "user",
-                "content": [
+                "model": "gpt-4o-mini",
+                "messages": [
                     {
-                    "type": "text",
-                    "text": prompt
-                    },
-                    {
-                    "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            }
+                        ]
                     }
-                ]
-                }
-            ],
-            "max_tokens": 300
+                ],
+                "max_tokens": 300
             }
 
             response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            return response.json()
             
 
 # Example usage
