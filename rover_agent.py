@@ -39,6 +39,7 @@ class Agent:
         
         
     def capture_frames_from_stream(self):
+        self.most_recent_timestamp = time.time()
         self.cap = cv2.VideoCapture(self.stream_url)
         # Initialize video capture from the stream URL
         if not self.cap.isOpened():
@@ -48,7 +49,7 @@ class Agent:
             ## move the current rover.jpg to the current timestamp.jpg in the /old_frames directory
             ## then save the current frame as rover.jpg
             ## this will allow us to keep a history of frames
-            old_frame_filename = f"old_frames/{time.time()}.jpg"
+            old_frame_filename = f"old_frames/{self.most_recent_timestamp}.jpg"
             os.rename("rover.jpg", old_frame_filename)
 
             ret, frame = self.cap.read()
@@ -82,6 +83,9 @@ class Agent:
         
         observation = self.upload_images_to_openai([frame], "You are a friendly, playful rover. Your visual point of view is third-person, but please think out loud in the first person. What do you see? Your response should help the next agent to generate the next move for the rover you are riding on. Please also make a short list of all objects that you see, for inventory purposes. Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see.")
         print(f"Observation: {observation}")
+        ## log observations based on this timestamp 
+        with open("observations.jsonl", "a") as f:
+            f.write((self.most_recent_timestamp + "|" + observation + "\n"))
 
         self.extract_items(observation)
         return observation
@@ -108,7 +112,7 @@ class Agent:
         print(f"Items: {items}")
         ## append
         with open(found_items_filepath, "a") as f:
-            f.write(items + "\n")
+            f.write((self.most_recent_timestamp + "|" + items + "\n"))
 
     def orient(self, observation):
         ## #todo a lot of the business logic of deciding what the next move should be
@@ -118,6 +122,8 @@ class Agent:
         self.messages.append({"role": "user", "content": "Please interpret what the vision model saw, and give a description of the plan for what to do next, try to avoid getting stuck in corners, and if you can't seem to roll forward, turn: " + observation})
         response = self.run_agent_step(self.messages)
         print(f"Orientation: {response}")
+        with open("orientations.jsonl", "a") as f:
+            f.write((self.most_recent_timestamp + "|" + response + "\n"))
         return response
 
     def decide(self, orientation):
@@ -143,6 +149,8 @@ class Agent:
                               """})
         decision = self.run_agent_step(self.messages)
         print(f"Decision: {decision}")
+        with open("decisions.jsonl", "a") as f:
+            f.write((self.most_recent_timestamp + "|" + decision + "\n"))
         return decision
 
     def act(self, decision):
@@ -166,6 +174,8 @@ class Agent:
         # Send command to the rover
         self.client.publish(f"action", action.get(decision,"h"))
         print(f"Action: {action.get(decision)}")
+        with open("actions.jsonl", "a") as f:
+            f.write((self.most_recent_timestamp + "|" + action.get(decision) + "\n"))
         return False
 
     def run(self):
