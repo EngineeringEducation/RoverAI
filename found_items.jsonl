@@ -1,0 +1,166 @@
+{
+  "inventory": [
+    {
+      "item": "Scratching post with feather attachments"
+    },
+    {
+      "item": "Fuzzy animal toy"
+    },
+    {
+      "item": "Small yellow ball",
+      "quantity": 2
+    },
+    {
+      "item": "Pink fluffy toy"
+    },
+    {
+      "item": "Sparkly pom-pom toy"
+    }
+  ]
+}
+{
+  "inventory": [
+    {
+      "item": "Cat Scratching Post",
+      "description": "Tall with a fluffy feather toy on top"
+    },
+    {
+      "item": "Soft Plush Toy",
+      "description": "Round critter, perfect for snuggling or tossing"
+    },
+    {
+      "item": "Colorful Ball",
+      "description": "Bright balls that entice play"
+    },
+    {
+      "item": "Pink Cat Toy",
+      "description": "Stretchy pink toy for batting around"
+    },
+    {
+      "item": "Shiny Tinsel Ball",
+      "description": "Sparkly object that catches attention"
+    }
+  ]
+}
+{
+  "inventory": [
+    {
+      "item": "Fluffy mouse toy",
+      "quantity": 1
+    },
+    {
+      "item": "Scratching post with feathers",
+      "quantity": 1
+    },
+    {
+      "item": "Yellow balls",
+      "quantity": 2
+    },
+    {
+      "item": "Pink fuzzy toy",
+      "quantity": 1
+    },
+    {
+      "item": "Purple fuzzy toy",
+      "quantity": 1
+    },
+    {
+      "item": "Cat",
+      "quantity": 1
+    }
+  ]
+}
+{
+  "inventory": [
+    {
+      "item": "Plush mouse",
+      "description": "A soft toy mouse with a fuzzy tail"
+    },
+    {
+      "item": "Scratch post",
+      "description": "A post with feathers for scratching"
+    },
+    {
+      "item": "Colorful pom-poms",
+      "description": "Small, fluffy pom-poms in various colors"
+    },
+    {
+      "item": "Small balls",
+      "description": "Balls of different colors, including yellow"
+    },
+    {
+      "item": "Fluffy pink object",
+      "description": "A fluffy item that might be a toy"
+    },
+    {
+      "item": "Soft pink plush item",
+      "description": "A soft pink item that could be a cat accessory"
+    }
+  ]
+}
+{
+  "inventory": [
+    "Fuzzy mouse toy",
+    "Cat scratch post with feathers",
+    "Sparkly toy",
+    "Bouncy balls"
+  ]
+}
+{
+  "inventory": [
+    {
+      "item": "fluffy mouse toy",
+      "attributes": {
+        "design": "striped",
+        "category": "cat toy"
+      }
+    },
+    {
+      "item": "scratching post",
+      "attributes": {
+        "features": "colorful feathers",
+        "category": "cat furniture"
+      }
+    },
+    {
+      "item": "small colorful balls",
+      "attributes": {
+        "count": 2,
+        "colors": ["yellow", "pink"],
+        "category": "cat toy"
+      }
+    },
+    {
+      "item": "sparkly pom-pom toy",
+      "attributes": {
+        "features": "shiny and sparkly",
+        "category": "cat toy"
+      }
+    },
+    {
+      "item": "pink twisty cat toy",
+      "attributes": {
+        "category": "cat toy"
+      }
+    }
+  ]
+}
+{
+  "inventory": [
+    {
+      "item": "Scratching post"
+    },
+    {
+      "item": "Furry toy (looks like a small animal)"
+    },
+    {
+      "item": "Shiny pom-pom"
+    },
+    {
+      "item": "Yellow ball"
+    },
+    {
+      "item": "Pink shapes (toys)"
+    }
+  ]
+}
