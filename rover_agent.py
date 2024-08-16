@@ -7,7 +7,7 @@ import requests
 
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
-RMPT=os.getenv("RMPT")
+RMTP=os.getenv("RMTP")
 
 # Function to encode the image
 def encode_image(image_path):
@@ -29,6 +29,8 @@ class Agent:
         self.client.connect(mqtt_broker, mqtt_port, 60)
         # self.vision_model = VisionModel()  # Initialize your vision model here
         self.messages = [{"role": "system", "content": "Initialize agent"}]
+        
+        
     def capture_frames_from_stream(self):
         # Initialize video capture from the stream URL
         
@@ -186,5 +188,5 @@ class Agent:
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 # Example usage
-agent = Agent("Rover1", MQTT_BROKER, MQTT_PORT, RMPT)
+agent = Agent("Rover1", MQTT_BROKER, MQTT_PORT, RMTP)
 agent.run()
