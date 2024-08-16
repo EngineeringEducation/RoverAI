@@ -7,39 +7,20 @@ import requests
 
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+RMPT=os.getenv("RMPT")
 
 # Function to encode the image
 def encode_image(image_path):
   with open(image_path, "rb") as image_file:
     return base64.b64encode(image_file.read()).decode('utf-8')
 
-# def capture_frame_from_youtube_stream(youtube_url, output_filename):
-#     # Get the stream URL
-#     yt = YouTube(youtube_url)
-#     stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
-#     stream_url = stream.url
-    
-#     # Open the stream using OpenCV
-#     cap = cv2.VideoCapture(stream_url)
+import cv2
+import time
 
-#     while True:
-#         ret, frame = cap.read()
-#         if not ret:
-#             print("Failed to grab frame")
-#             break
-
-#         # Overwrite the frame in the same file
-#         cv2.imwrite(output_filename, frame)
-
-#         # Exit loop if 'q' is pressed
-#         if cv2.waitKey(1) & 0xFF == ord('q'):
-#             break
-
-#     cap.release()
-#     cv2.destroyAllWindows()
 
 class Agent:
-    def __init__(self, agent_name, mqtt_broker, mqtt_port):
+    def __init__(self, agent_name, mqtt_broker, mqtt_port, stream_url):
+        self.cap = cv2.VideoCapture(stream_url)
         self.openai_client = OpenAI()
         self.openai_client.api_key = os.getenv("OPENAI_API_KEY")
         self.agent_name = agent_name
@@ -48,6 +29,28 @@ class Agent:
         self.client.connect(mqtt_broker, mqtt_port, 60)
         # self.vision_model = VisionModel()  # Initialize your vision model here
         self.messages = [{"role": "system", "content": "Initialize agent"}]
+    def capture_frames_from_stream(self):
+        # Initialize video capture from the stream URL
+        
+
+        if not self.cap.isOpened():
+            print("Error: Unable to open stream.")
+            return
+        try:
+            ret, frame = self.cap.read()
+            if not ret:
+                print("Error: Unable to fetch frame.")
+                return
+
+            # Save the frame as an image file
+            cv2.imwrite(f"rover.jpg", frame)
+            print(f"Captured frame")
+
+
+        finally:
+            # Release the video capture object
+            self.cap.release()
+            cv2.destroyAllWindows()
 
     def observe(self):
         ## here's where the "limbic system" of the agent will live
@@ -128,7 +131,8 @@ class Agent:
     def get_camera_frame(self):
 
         ## read rover.png
-        output_filename = "rover.png"
+        output_filename = "rover.jpg"
+        self.capture_frames_from_stream()
 
         return output_filename
 
@@ -182,5 +186,5 @@ class Agent:
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 # Example usage
-agent = Agent("Rover1", MQTT_BROKER, MQTT_PORT)
+agent = Agent("Rover1", MQTT_BROKER, MQTT_PORT, RMPT)
 agent.run()
