@@ -81,7 +81,7 @@ class Agent:
         frame = self.get_camera_frame()  
         # Analyze the frame using the vision model by sending the image to openai and asking it to interpret what it sees and give directions to the next agent to generate the next move
         
-        observation = self.upload_images_to_openai([frame], "You are a friendly, playful rover. Your visual point of view is third-person, but please think out loud in the first person. What do you see? Your response should help the next agent to generate the next move for the rover you are riding on. Please also make a short list of all objects that you see, for inventory purposes. Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see.")
+        observation = self.upload_images_to_openai([frame], "You are a friendly, playful rover who is the camera operator in a nature documentary about animals in a domestic setting. Your visual point of view is third-person, but please think out loud in the first person. What do you see? Your response should help the next agent to generate the next move for the rover you are riding on. Please also make a short list of all objects that you see, for inventory purposes. Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see. ")
         print(f"Observation: {observation}")
         ## log observations based on this timestamp 
         with open("observations.jsonl", "a") as f:
@@ -119,7 +119,7 @@ class Agent:
         ## in relation to the goals of the agent will live here
         ## we'll need to add some system prompting and rover logic here
         # Process observation data using gpt4-o-mini
-        self.messages.append({"role": "user", "content": "Please interpret what the vision model saw, and give a description of the plan for what to do next, try to avoid getting stuck in corners, and if you can't seem to roll forward, turn: " + observation})
+        self.messages.append({"role": "user", "content": "Please interpret what the vision model saw, and give a description of the plan for what to do next, try to avoid getting stuck in corners, and if you can't seem to roll forward, turn. You are the camera person in a nature documentary about any animals you see, so try to keep any animals in the camera frame using your movements: " + observation})
         response = self.run_agent_step(self.messages)
         print(f"Orientation: {response}")
         with open("orientations.jsonl", "a") as f:
