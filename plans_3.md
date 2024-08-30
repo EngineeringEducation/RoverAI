@@ -1,12 +1,12 @@
 ## Next Steps
 
 ## Vision
-- Send multiple snapshots for comparison
+- [x] Send multiple snapshots for comparison
 - Detect image similarity prior to sending snapshots
 
 ## Better Actions
-- write function to allow rover to send multiple commands at once, along with delays between them
-- Better capture intent of action
+- [x] write function to allow rover to send multiple commands at once, along with delays between them
+- [x] Better capture intent of action
 
 ## Better Cognitive Architecture to support Better Actions
 - The observe phase could compare images for major changes and only involve the orienter if needed

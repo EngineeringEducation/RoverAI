@@ -698,3 +698,606 @@
 1724457865.3870633|forward
 1724457877.427695|forward
 1724457890.3125415|forward
+1725053076.2650628|forward
+1725053101.10216|left
+1725053125.5108852|forward
+1725053141.3510518|right
+1725053160.8828602|forward
+1725053175.645577|forward
+1725053198.2422163|left
+1725053216.112473|forward
+1725053230.7387538|right
+1725053246.7593994|forward
+1725053263.8082638|forward
+1725053279.4817278|forward
+1725053296.515312|left
+1725053311.6195152|left
+1725053326.1595883|right
+1725053341.9744022|forward
+1725053357.0217843|forward
+1725053374.1202629|left
+1725053392.4330318|forward
+1725053407.523711|forward
+1725053421.629524|left
+1725053435.965329|forward
+1725053452.0170557|right
+1725053467.7347956|forward
+1725053483.392764|left
+1725053503.1495473|left
+1725053518.0674288|forward
+1725053534.072626|forward
+1725053551.9962928|forward
+1725053569.51626|left
+1725053584.8668404|forward
+1725053603.3476853|forward
+1725053620.152809|forward
+1725053635.9842658|forward
+1725053652.33738|forward
+1725053669.4891908|forward
+1725053689.8811095|left
+1725053705.0781727|forward
+1725053720.6815636|left
+1725053735.3485243|left
+1725053751.0802643|right
+1725053766.5724053|forward
+1725053782.8417754|left
+1725053800.5493581|forward
+1725053816.1482584|forward
+1725053833.0166423|right
+1725053848.780955|left
+1725053865.0170653|forward
+1725053881.5803287|forward
+1725053897.5686123|left
+1725053913.7522676|forward
+1725053929.3117|right
+1725053944.6531558|left
+1725053960.2122693|forward
+1725053977.162815|left
+1725053993.2922568|forward
+1725054008.7784004|forward
+1725054023.9505072|forward
+1725054038.0388947|left
+1725054053.732342|left
+1725054069.6043599|forward
+1725054088.5158894|forward
+1725054103.6042662|left
+1725054119.3552048|left
+1725054140.2907636|forward
+1725054155.5882812|forward
+1725054170.68346|left
+1725054187.7711842|left
+1725054204.1200075|left
+1725054223.0520062|forward
+1725054239.1392357|forward
+1725054254.2614605|forward
+1725054269.140262|forward
+1725054285.1202598|left
+1725054302.7482684|forward
+1725054317.668264|forward
+1725054334.040259|left
+1725054350.4202602|left
+1725054366.3123753|forward
+1725054381.4882982|forward
+1725054397.6069913|forward
+1725054413.2282755|forward
+1725054428.033342|forward
+1725054444.2522643|left
+1725054460.746601|forward
+1725054476.3989608|left
+1725054492.5722578|backward
+1725054507.3035548|forward
+1725054521.5682783|left
+1725054536.0083096|forward
+1725054552.3759449|forward
+1725054568.5322673|forward
+1725054583.5865164|left
+1725054601.240598|right
+1725054617.6948998|forward
+1725054633.1729405|forward
+1725054647.3926613|left
+1725054661.8191268|forward
+1725054678.6482608|left
+1725054693.8642602|forward
+1725054712.0907633|right
+1725054726.8441556|left
+1725054745.024257|forward
+1725054759.8199646|forward
+1725054775.9987934|left
+1725054792.2768242|left
+1725054807.300257|forward
+1725054823.3410616|forward
+1725054838.4090652|forward
+1725054853.3522577|left
+1725054868.1127064|backward
+1725054884.6708488|left
+1725054902.7814848|forward
+1725054918.9611073|right
+1725054934.0322797|right
+1725054949.6980891|left
+1725054965.7882626|left
+1725054981.120293|right
+1725054999.6122732|left
+1725055015.020266|right
+1725055031.3040414|forward
+1725055047.17379|right
+1725055078.2160082|```
+move: "left", time: 150
+move: "forward", time: 450
+move: "right", time: 50
+move: "forward", time: 450
+```
+1725055131.941357|```
+move: "left", time: 150
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+```
+1725055178.7743492|```
+move: "right", time: 300
+move: "forward", time: 450
+```
+1725055249.4261088|```
+move: "right", time: 500
+move: "forward", time: 1000
+move: "hold", time: 1000
+```
+1725055268.4920046|```
+move: "right", time: 500
+move: "forward", time: 1500
+hold: "", time: 1000
+```
+1725055291.454244|```
+move: "right", time: 500
+move: "forward", time: 1500
+move: "hold", time: 1000
+```
+1725055311.7378068|```
+move: "right", time: 500
+move: "forward", time: 1750
+move: "hold", time: 1000
+```
+1725055334.9820147|```
+move: "right", time: 500
+move: "forward", time: 2000
+move: "hold", time: 1000
+```
+1725055356.6802812|```
+move: "forward", time: 3000
+move: "hold", time: 1000
+```
+1725055379.880768|``` 
+move: "forward", time: 3000
+hold: "", time: 1000
+```
+1725055403.0843394|```
+move: "forward", time: 3500
+move: "right", time: 500
+move: "forward", time: 2000
+hold: "", time: 1000
+```
+1725055435.138933|```
+move: "left", time: 150
+move: "forward", time: 250
+move: "right", time: 150
+move: "forward", time: 400
+```
+1725055454.5043507|```  
+move: "right", time: 900  
+move: "forward", time: 450  
+```  
+1725055474.1135604|```
+move: "backward", time: 300
+move: "right", time: 900
+move: "forward", time: 400
+move: "left", time: 450
+```
+1725055495.0905006|``` 
+move: "backward", time: 300
+move: "right", time: 900
+move: "forward", time: 400
+move: "left", time: 450
+move: "forward", time: 400
+```
+1725055517.2583416|```
+move: "backward", time: 300
+move: "right", time: 900
+move: "forward", time: 400
+```
+1725055540.7402573|```
+move: "backward", time: 300
+move: "right", time: 900
+move: "forward", time: 400
+```
+1725055561.6013424|```
+move: "backward", time: 300
+move: "right", time: 900
+move: "forward", time: 400
+hold: "0"
+```
+1725055626.0117784|``` 
+move: "backward", time: 2000
+move: "hold", time: 500
+move: "forward", time: 2000
+move: "left", time: 150
+move: "forward", time: 5000
+```
+1725056115.6895118|```
+move: "right", time: 1000
+move: "forward", time: 450
+move: "left", time: 1000
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725056142.5304527|``` 
+move: "right", time: 1000
+move: "forward", time: 900
+move: "left", time: 1000
+move: "forward", time: 900
+move: "hold", time: 1000
+```
+1725056167.5896819|```
+move: "left", time: 1000
+move: "forward", time: 900
+move: "hold", time: 1000
+```
+1725056191.5382454|```
+move: "left", time: 1000
+move: "forward", time: 900
+move: "hold", time: 1000
+```
+1725056217.59567|```
+move: "forward", time: 1000
+move: "right", time: 1000
+move: "forward", time: 1000
+move: "hold", time: 1000
+```
+1725056243.5474815|```
+move: "forward", time: 1000
+move: "left", time: 1000
+move: "forward", time: 1000
+move: "hold", time: 1000
+```
+1725056272.8031354|```
+move: "forward", time: 1000
+move: "right", time: 1000
+move: "forward", time: 1000
+move: "hold", time: 1000
+```
+1725056300.552988|```
+move: "forward", time: 1000
+move: "left", time: 1000
+move: "forward", time: 1000
+hold: "hold", time: 1000
+```
+1725056326.6507182|```
+move: "forward", time: 1000
+move: "left", time: 1000
+move: "forward", time: 1000
+move: "hold", time: 1000
+```
+1725056355.4485016|```
+move: "left", time: 1000
+move: "forward", time: 1000
+move: "right", time: 1000
+hold: "hold", time: 1000
+```
+1725056382.2884016|```
+move: "left", time: 1000
+move: "forward", time: 1000
+move: "right", time: 1000
+hold: "1000"
+```
+1725056589.3775518|```
+move: "right", time: 150
+move: "forward", time: 300
+move: "left", time: 200
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725056610.9453096|```
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+move: "right", time: 150
+```
+1725056632.9599497|```
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725056658.732266|```
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 450
+```
+1725056686.978865|```
+move: "forward", time: 450
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 600
+```
+1725056714.2398732|```
+move: "hold", time: 2000
+move: "right", time: 450
+move: "forward", time: 600
+move: "hold", time: 1000
+```
+1725056742.1595519|```
+move: "left", time: 150
+move: "forward", time: 600
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 600
+```
+1725056776.264995|```
+move: "right", time: 150
+move: "forward", time: 600
+move: "hold", time: 2000
+```
+1725056801.2642694|```
+move: "forward", time: 600
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 600
+```
+1725056827.516289|```
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 600
+```
+1725056853.724279|```
+move: "right", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+```
+1725056883.5068533|```
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725056912.7366037|```
+move: "left", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725056942.4074595|```
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 800
+```
+1725056967.8115966|```
+move: "left", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725057000.1421518|```
+move: "left", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725057026.4924188|```
+move: "right", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725057054.0302868|```
+move: "right", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725057090.1693237|```
+move: "left", time: 150
+move: "forward", time: 800
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725057116.9070294|``` 
+move: "left", time: 150
+move: "forward", time: 1000
+move: "hold", time: 2000
+move: "right", time: 150
+move: "forward", time: 1000
+```
+1725057148.1346087|```
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057170.3286579|```
+move: "forward", time: 1500
+move: "hold", time: 1000
+move: "right", time: 150
+move: "forward", time: 1200
+```
+1725057193.8873155|```
+move: "left", time: 1500
+move: "forward", time: 1500
+move: "hold", time: 2000
+move: "forward", time: 1500
+```
+1725057221.0181525|```
+move: "right", time: 1500
+move: "forward", time: 1200
+move: "hold", time: 2000
+```
+1725057266.4674482|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057286.8882577|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057309.152347|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057334.9242568|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057362.109616|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057393.3888657|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057418.7802596|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057445.9823668|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057470.9154606|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057496.5731182|```
+move: "forward", time: 450
+move: "left", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057523.4722488|```
+move: "forward", time: 450
+move: "right", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057550.8043504|```
+move: "forward", time: 450
+move: "right", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057577.9562607|``` 
+move: "forward", time: 450
+move: "right", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057603.9078846|```
+move: "forward", time: 450
+move: "right", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057628.3809395|```
+move: "forward", time: 450
+move: "right", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057655.498919|``` 
+move: "forward", time: 450
+move: "right", time: 150
+move: "forward", time: 300
+move: "hold", time: 1000
+```
+1725057683.438747|```
+move: "forward", time: 450
+move: "hold", time: 1000
+move: "right", time: 150
+move: "forward", time: 450
+```
+1725057709.8202782|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057735.824254|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057758.6489675|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057782.5151324|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057807.5564191|``` 
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057839.1204398|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057863.1573925|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057887.9619052|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057912.6957653|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057938.27648|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057964.5891943|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725057989.1323502|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725058014.5169895|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725058036.9202578|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725058061.8882577|```
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725058085.2778034|``` 
+move: "forward", time: 450
+move: "hold", time: 1000
+```
+1725058110.2882626|``` 
+move: "forward", time: 450
+move: "hold", time: 1000
+```

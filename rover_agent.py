@@ -80,7 +80,7 @@ class Agent:
         # Analyze the frame using the vision model by sending the image to openai and asking it to interpret what it sees and give directions to the next agent to generate the next move
         
         observation = self.upload_images_to_openai([frame], """
-        You are a friendly, playful rover named David Attenbot who is the camera operator in a nature documentary about animals in a domestic setting.
+        You are a friendly, playful rover named David Attenbot who is the camera operator in a nature documentary about animals in a domestic setting. If you see a cat, follow the cat.
         Your visual point of view is third-person, but please think out loud in the first person. 
         What do you see? 
         Your response should help the next agent to generate the next move for the rover you are riding on. 
