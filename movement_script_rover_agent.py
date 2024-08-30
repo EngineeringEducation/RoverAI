@@ -20,8 +20,6 @@ def encode_image(image_path):
   with open(image_path, "rb") as image_file:
     return base64.b64encode(image_file.read()).decode('utf-8')
 
-
-
 class Agent:
     def __init__(self, agent_name, mqtt_broker, mqtt_port, stream_url):
         
@@ -34,10 +32,12 @@ class Agent:
         self.client.connect(mqtt_broker, mqtt_port, 60)
         self.messages = [{"role": "system", "content": "Initialize agent"}]
         self.last_few_moves = []
+        self.last_few_frames = []
         
         
     def capture_frames_from_stream(self):
         self.most_recent_timestamp = time.time()
+
         self.cap = cv2.VideoCapture(self.stream_url)
         # Initialize video capture from the stream URL
         if not self.cap.isOpened():
@@ -49,6 +49,7 @@ class Agent:
             ## this will allow us to keep a history of frames
             old_frame_filename = f"old_frames/{self.most_recent_timestamp}.jpg"
             os.rename("rover.jpg", old_frame_filename)
+
 
             ret, frame = self.cap.read()
             if not ret:
@@ -83,6 +84,7 @@ class Agent:
         You are a friendly, playful rover named David Attenbot who is the camera operator in a nature documentary about animals in a domestic setting. If you see a cat, follow the cat.
         Your visual point of view is third-person, but please think out loud in the first person. 
         What do you see? 
+        You should see the last 5 images in order (so long as there are at least 5 frames to show), so you can see the progression of the rover's movement.
         Your response should help the next agent to generate the next move for the rover you are riding on. 
         Please also make a short list of all objects that you see, for inventory purposes. 
         Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see. 
@@ -137,12 +139,14 @@ class Agent:
         Don't be overly cautious, as this will cause the rover to end up going in circles to avoid obstacles too often.
         Encourage the rover to move forward as often as possible, and to turn only when necessary, or if stuck.
         You may need to get closer to a wall in order to move into a position where you can go forward. 
-        Don't worry about running into obstacles, you can touch them if needed.
-        You are currently trapped in a hallway, your job is to escape the hallway and explore the house.
+        Don't worry about running into obstacles, you can touch them if needed. Instruct the next agent to back up if stuck.
+        
         You are the camera person in a nature documentary about any animals you see, so try to keep any animals in the camera frame using your movements. If you don't see any animals, try to find some! 
         Your last few moves were : {",".join(self.last_few_moves)}
         If you find yourself turning left, then right, then left again, you've gotten caught in a loop. Try moving forward.
-        Reply only with the next move, as your response will be interpreted and if you respond with more than one move, the rover may get confused.
+        
+        Your response will be interpreted and translated into a script of movements, so you can give a directive in natural language, but give specific instructions for the rover to follow, such as "move forward several inches, then turn left, then move forward again".
+        Ultimately, the decider will translate your instructions into a script of commands for the rover to follow with miliseconds of timing for each move.
         Make sure to take the observations into account when deciding the next move. Roll backwards if we're stuck on an obstacle, and turn if we're stuck in a corner.
         """}]
         response = self.run_agent_step(prompt_messages, model="gpt-4o")
@@ -157,23 +161,23 @@ class Agent:
         # Decide the action based on the orientation
         prompt_messages = self.messages + [{"role": "user", "content": f"""
             Orientation Agent says to: {orientation}
-            Given the observation and orientation, what should the next move be? Do not always choose Forward, as the rover may need to turn or go backward to avoid obstacles.
-            You have the following options for what to do next, please only extract what the orientation says to do next:
+            Given the observation and orientation, what should the next move be? Do not always choose Forward, as the rover may need to turn or go backward to avoid obstacles or get itself unstuck.
+            You have the following options for what to do next, please only rephrase what the orientation says to do next.
+            You'll respond with a series of actions, as a script, which will be sent to the rover and executed by the rover. You can send any number of actions, but probably stop at 10.
+            The "move" key is the direction to move, and the "time" key is the time in milliseconds to move in that direction.
+            ```
+            move: "forward", time: 450
+            move: "left", time: 150
+            move: "forward", time: 450
+            move: "hold", time: 1000
+            ```
+            You can move in these directions:
             "hold",
             "forward",
             "backward",
             "left",
-            "slightLeft",
-            "right",
-            "slightRight",
-            "superForward",
-            "superRight",
-            "superLeft",
-            "superBackward",
-            "aux",
-            "shoot",
-            "turnaround"
-            Please reply with one of these strings only, exactly, with no other text.
+            "right"
+            Please reply with the movements requested, exactly, with no other text, in a markdown code block.
         """}]
         decision = self.run_agent_step(prompt_messages, model="gpt-4o-mini")
         print(f"Decision: {decision}")
@@ -185,33 +189,40 @@ class Agent:
         return decision
 
     def act(self, decision):
-        # Extract the command from decision
-        action = {
+        moves = {
             "hold": "h",
-            "go": "g",
             "forward": "f",
             "backward": "b",
             "left": "l",
-            "right": "r",
-            "superForward": "w",
-            "superRight": "d",
-            "superLeft": "a",
-            "superBackward": "s",
-            "aux": "x",
-            "shoot": "z",
-            "turnaround": "t",
-            "slightLeft": '{ "move": "l", "time": 150}',
-            "slightRight": '{ "move": "r", "time": 150}',
+            "right": "r"
         }
-        if decision == "slightLeft" or decision == "slightRight":
-            self.client.publish(f"jAction", action.get(decision,"h"))
-
-        else:
-            # Send command to the rover
-            self.client.publish(f"action", action.get(decision,"h"))
-        print(f"Action: {action.get(decision)}")
-        with open("actions.jsonl", "a") as f:
-            f.write((str(self.most_recent_timestamp) + "|" + action.get(decision) + "\n"))
+        ## extract the series of commands from the decision and run them
+        extracted_code_block = decision.split("```")
+        if len(extracted_code_block) > 1:
+            decision = extracted_code_block[1]
+        ## now parse each line as a jaction
+        script = decision.split("\n")
+        for line in script:
+            if line.strip() == "":
+                continue
+            try:
+                ## convert the line to json
+                move, moveTime = line.split(",")
+                move = moves.get(move.split(":")[1].strip().replace('"', ""), "h")
+                moveTime = moveTime.split(":")[1].strip()
+                ## send the jAction to the rover
+                jAction = {
+                    "move": move,
+                    "time": int(moveTime)
+                }
+                self.client.publish(f"jAction", json.dumps(jAction))
+                time.sleep(int(moveTime)/1000)
+                print(f"Action: {jAction}")
+            except Exception as e:
+                continue
+            with open("actions.jsonl", "a") as f:
+                f.write((str(self.most_recent_timestamp) + "|" + json.dumps(jAction) + "\n"))
+        
         return False
 
     def run(self):
@@ -251,29 +262,33 @@ class Agent:
         for image in images:
             # Getting the base64 string
             base64_image = encode_image(image)
+            ## put the current frame at the beginning of last_few_frames
+            self.last_few_frames.insert(0, base64_image)
+            if len(self.last_few_frames) > 5:
+                self.last_few_frames.pop(-1)
 
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.openai_client.api_key}",
             }
+            content = [{
+                "type": "text",
+                "text": prompt
+            }]
+            for image in self.last_few_frames:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}"
+                    }
+                })
 
             payload = {
                 "model": "gpt-4o-mini",
                 "messages": last_few_messages + [
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
+                        "content": content
                     }
                 ],
                 "max_tokens": 300
