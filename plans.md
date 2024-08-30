@@ -1,4 +1,4 @@
-1. can we actually issue any commands to the rover
+
 
 
 ideas people brought up on stream
@@ -9,3 +9,6 @@ ideas people brought up on stream
 - Search for objects- crawl the space and find something specific
 - Let Twitch Chat Interact with the Rover AI
 
+
+
+--

@@ -15,9 +15,6 @@ list_of_found_items = []
 found_items_filepath = "found_items.jsonl"
 
 
-
-
-
 # Function to encode the image
 def encode_image(image_path):
   with open(image_path, "rb") as image_file:
@@ -36,6 +33,7 @@ class Agent:
         self.client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         self.client.connect(mqtt_broker, mqtt_port, 60)
         self.messages = [{"role": "system", "content": "Initialize agent"}]
+        self.last_few_moves = []
         
         
     def capture_frames_from_stream(self):
@@ -81,13 +79,25 @@ class Agent:
         frame = self.get_camera_frame()  
         # Analyze the frame using the vision model by sending the image to openai and asking it to interpret what it sees and give directions to the next agent to generate the next move
         
-        observation = self.upload_images_to_openai([frame], "You are a friendly, playful rover. Your visual point of view is third-person, but please think out loud in the first person. What do you see? Your response should help the next agent to generate the next move for the rover you are riding on. Please also make a short list of all objects that you see, for inventory purposes. Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see.")
+        observation = self.upload_images_to_openai([frame], """
+        You are a friendly, playful rover named David Attenbot who is the camera operator in a nature documentary about animals in a domestic setting.
+        Your visual point of view is third-person, but please think out loud in the first person. 
+        What do you see? 
+        Your response should help the next agent to generate the next move for the rover you are riding on. 
+        Please also make a short list of all objects that you see, for inventory purposes. 
+        Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see. 
+        In your response, do note if we're facing a wall, or an obstacle, and direct the next agent to turn left or right, based on the image. 
+        Don't list the wall in the list of objects, only give directions to the next agent, so that it can properly turn if need be. 
+        If you seem to be in a corner, suggest reversing course. You are small, so you can probabaly fit in small spaces, so don't worry if an obstacle is far away, only if you're only a few inches from it.
+        Try not to knock things over, but feel free to get close, especially if the object is interesting.
+        """)
         print(f"Observation: {observation}")
         ## log observations based on this timestamp 
         with open("observations.jsonl", "a") as f:
-            f.write((self.most_recent_timestamp + "|" + observation + "\n"))
+            f.write((str(self.most_recent_timestamp) + "|" + observation + "\n"))
 
         self.extract_items(observation)
+        # self.messages.append({"role": "assistant", "content": observation})
         return observation
 
     def extract_items(self,observation):
@@ -109,35 +119,53 @@ class Agent:
             response_format={"type": "json_object"}
         )
         items = response.choices[0].message.content
-        print(f"Items: {items}")
+        ## print(f"Items: {items}")
         ## append
         with open(found_items_filepath, "a") as f:
-            f.write((self.most_recent_timestamp + "|" + items + "\n"))
+            f.write((str(self.most_recent_timestamp) + "|" + items + "\n"))
 
     def orient(self, observation):
         ## #todo a lot of the business logic of deciding what the next move should be
         ## in relation to the goals of the agent will live here
         ## we'll need to add some system prompting and rover logic here
         # Process observation data using gpt4-o-mini
-        self.messages.append({"role": "user", "content": "Please interpret what the vision model saw, and give a description of the plan for what to do next, try to avoid getting stuck in corners, and if you can't seem to roll forward, turn: " + observation})
-        response = self.run_agent_step(self.messages)
+        prompt_messages = self.messages + [{"role": "user", "content": f"""
+        {observation}
+        Please interpret what the vision model saw, and give a description of the plan for what to do next. 
+        Try to avoid getting stuck in corners, and if you can't seem to roll forward, turn. Here's what the vision model saw and thought: {observation}
+        Try to avoid going in circles - your goal is to explore the house, so make sure you're moving forward and not just turning around in circles.
+        Don't be overly cautious, as this will cause the rover to end up going in circles to avoid obstacles too often.
+        Encourage the rover to move forward as often as possible, and to turn only when necessary, or if stuck.
+        You may need to get closer to a wall in order to move into a position where you can go forward. 
+        Don't worry about running into obstacles, you can touch them if needed.
+        You are currently trapped in a hallway, your job is to escape the hallway and explore the house.
+        You are the camera person in a nature documentary about any animals you see, so try to keep any animals in the camera frame using your movements. If you don't see any animals, try to find some! 
+        Your last few moves were : {",".join(self.last_few_moves)}
+        If you find yourself turning left, then right, then left again, you've gotten caught in a loop. Try moving forward.
+        Reply only with the next move, as your response will be interpreted and if you respond with more than one move, the rover may get confused.
+        Make sure to take the observations into account when deciding the next move. Roll backwards if we're stuck on an obstacle, and turn if we're stuck in a corner.
+        """}]
+        response = self.run_agent_step(prompt_messages, model="gpt-4o")
         print(f"Orientation: {response}")
         with open("orientations.jsonl", "a") as f:
-            f.write((self.most_recent_timestamp + "|" + response + "\n"))
+            f.write((str(self.most_recent_timestamp) + "|" + response + "\n"))
+        ## save the orientation in recent memory
+        self.messages.append({"role": "user", "content": response})
         return response
 
     def decide(self, orientation):
         # Decide the action based on the orientation
-        # #todo we'll need to add some system prompting and rover logic here
-        self.messages.append({"role": "user", "content": orientation})
-        self.messages.append({"role": "user", "content": """
-            You have the following options for what to do next:
+        prompt_messages = self.messages + [{"role": "user", "content": f"""
+            Orientation Agent says to: {orientation}
+            Given the observation and orientation, what should the next move be? Do not always choose Forward, as the rover may need to turn or go backward to avoid obstacles.
+            You have the following options for what to do next, please only extract what the orientation says to do next:
             "hold",
-            "go",
             "forward",
             "backward",
             "left",
+            "slightLeft",
             "right",
+            "slightRight",
             "superForward",
             "superRight",
             "superLeft",
@@ -146,11 +174,14 @@ class Agent:
             "shoot",
             "turnaround"
             Please reply with one of these strings only, exactly, with no other text.
-                              """})
-        decision = self.run_agent_step(self.messages)
+        """}]
+        decision = self.run_agent_step(prompt_messages, model="gpt-4o-mini")
         print(f"Decision: {decision}")
+        self.last_few_moves.append(decision)
+        if len(self.last_few_moves) > 20:
+            self.last_few_moves.pop(0)
         with open("decisions.jsonl", "a") as f:
-            f.write((self.most_recent_timestamp + "|" + decision + "\n"))
+            f.write((str(self.most_recent_timestamp) + "|" + decision + "\n"))
         return decision
 
     def act(self, decision):
@@ -168,14 +199,19 @@ class Agent:
             "superBackward": "s",
             "aux": "x",
             "shoot": "z",
-            "turnaround": "t"
+            "turnaround": "t",
+            "slightLeft": '{ "move": "l", "time": 150}',
+            "slightRight": '{ "move": "r", "time": 150}',
         }
+        if decision == "slightLeft" or decision == "slightRight":
+            self.client.publish(f"jAction", action.get(decision,"h"))
 
-        # Send command to the rover
-        self.client.publish(f"action", action.get(decision,"h"))
+        else:
+            # Send command to the rover
+            self.client.publish(f"action", action.get(decision,"h"))
         print(f"Action: {action.get(decision)}")
         with open("actions.jsonl", "a") as f:
-            f.write((self.most_recent_timestamp + "|" + action.get(decision) + "\n"))
+            f.write((str(self.most_recent_timestamp) + "|" + action.get(decision) + "\n"))
         return False
 
     def run(self):
@@ -185,6 +221,8 @@ class Agent:
             orientation = self.orient(environment_data)
             decision = self.decide(orientation)
             exit_loop = self.act(decision)
+            ## make the rover sleep for 5 seconds
+            time.sleep(5)
 
     def get_camera_frame(self):
 
@@ -194,30 +232,34 @@ class Agent:
 
         return output_filename
 
-    def run_agent_step(self, messages, max_tokens=300):
+    def run_agent_step(self, messages, max_tokens=300, model="gpt-4o-mini"):
         print(len(messages), " messages in context")
+        if len(messages) > 50:
+            messages = messages[1:]
+
         response = self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=messages,
             max_tokens=max_tokens,
         )
-        print(response.choices[0].message)
+        # print(response.choices[0].message)
         return response.choices[0].message.content
         
 
     def upload_images_to_openai(self,images, prompt):
+        last_few_messages = self.messages[-8:]
         for image in images:
             # Getting the base64 string
             base64_image = encode_image(image)
 
             headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.openai_client.api_key}",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.openai_client.api_key}",
             }
 
             payload = {
                 "model": "gpt-4o-mini",
-                "messages": [
+                "messages": last_few_messages + [
                     {
                         "role": "user",
                         "content": [
