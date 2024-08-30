@@ -88,7 +88,7 @@ class Agent:
         # Do not add any code or return statements outside of step_wrapper
         """
         response = self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1000,
         )
@@ -105,18 +105,26 @@ class Agent:
         if os.path.exists(phase_dir):
             for filename in os.listdir(phase_dir):
                 if filename.endswith(".py"):
-                    module_name = filename[:-3]
-                    spec = importlib.util.spec_from_file_location(module_name, os.path.join(phase_dir, filename))
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    if hasattr(module, 'step_wrapper'):
-                        step = module.step_wrapper()
-                        if isinstance(step, PrioritizedStep):
-                            steps.append(step)
+                    try:
+                        module_name = filename[:-3]
+                        spec = importlib.util.spec_from_file_location(module_name, os.path.join(phase_dir, filename))
+                        module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(module)
+                        if hasattr(module, 'step_wrapper'):
+                            step = module.step_wrapper()
+                            if isinstance(step, PrioritizedStep):
+                                steps.append(step)
+                            else:
+                                print(f"Warning: {module_name} does not return a PrioritizedStep object")
                         else:
-                            print(f"Warning: {module_name} does not return a PrioritizedStep object")
-                    else:
-                        print(f"Warning: {module_name} does not contain a step_wrapper function")
+                            print(f"Warning: {module_name} does not contain a step_wrapper function")
+                    except Exception as e:
+                        print(f"Error loading {filename}: {e}")
+                        ## send the error to chatgpt to fix the code
+                        self.messages.append({"role": "system", "content": f"Error loading this module {filename}: {e}"})
+                        ## issue self modification directive to fix the code
+                        self.issue_self_modification_directive(phase, module_name, "Fix the error", 1)
+
         return steps
 
     def execute_phase(self, phase: str, environment: dict, prior_steps: dict) -> List[PrioritizedStep]:

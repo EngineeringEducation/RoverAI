@@ -24,8 +24,7 @@ def step_wrapper():
             agent.issue_self_modification_directive(
                 "observe", 
                 "detect_obstacles",
-                "Add a new function to handle this specific type of obstacle.",
-                "lambda context: 15 if 'obstacle' in context.get('last_observation', '') else 0"
+                "Add a new function to handle this specific type of obstacle."
             )
 
     def utility_function(context):
