@@ -23,3 +23,15 @@
 
 ## Self-Modification
 Allowing the rover to self-modify can have good or disasterous results, we'll have to think hard about the architecture.
+
+## Physical Usefulness
+- [ ] Bigger Robot Maybe
+- [ ] A Button Presser? (something that could apply force without being too heavy, like a mantis shrimp)
+- [ ] Animal Detector / Soundbox player? (scares birds or maybe people out)
+- [ ] IR Transmitter (for remote controlling far-away things)
+- [ ] Gyroscope
+
+## Stuff that might be too boring for livestream
+- [ ] Fix latency for video
+- [ ] Get ROS up so we can do VSLAM
+- [ ] VSLAM - how does it work even
