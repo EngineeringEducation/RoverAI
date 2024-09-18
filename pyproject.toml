@@ -1,0 +1,10 @@
+[project]
+name = "roverai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.46.0",
+    "paho-mqtt>=2.1.0",
+]
