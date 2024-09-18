@@ -5,6 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "asyncio>=3.4.3",
+    "instructor>=0.4.8",
+    "loguru>=0.7.2",
     "openai>=1.46.0",
+    "opencv-python>=4.10.0.84",
     "paho-mqtt>=2.1.0",
+    "peewee>=3.17.6",
+    "prometheus-client>=0.20.0",
+    "tenacity>=9.0.0",
+    "transitions>=0.9.2",
 ]
