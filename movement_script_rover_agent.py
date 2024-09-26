@@ -58,6 +58,15 @@ class Agent:
 
             # Save the frame as an image file
             cv2.imwrite(f"rover.jpg", frame)
+            ## read the rover.jpg image file 
+            
+            base64_image = encode_image("rover.jpg")
+
+            
+            ## put the current frame at the beginning of last_few_frames
+            self.last_few_frames.insert(0, base64_image)
+            if len(self.last_few_frames) > 5:
+                self.last_few_frames.pop(-1)
             print(f"Captured frame")
 
 
@@ -77,10 +86,10 @@ class Agent:
         ## we'll need to add some system prompting and rover logic here
         ## but also figure out which frame number we're on so we can either capture or not capture a frame
         # Capture a frame from the Camera stream
-        frame = self.get_camera_frame()  
+        self.get_camera_frame()  
         # Analyze the frame using the vision model by sending the image to openai and asking it to interpret what it sees and give directions to the next agent to generate the next move
         
-        observation = self.upload_images_to_openai([frame], """
+        observation = self.upload_images_to_openai("""
         You are a friendly, playful rover named David Attenbot who is the camera operator in a nature documentary about animals in a domestic setting. If you see a cat, follow the cat.
         Your visual point of view is third-person, but please think out loud in the first person. 
         What do you see? 
@@ -147,7 +156,7 @@ class Agent:
         
         Your response will be interpreted and translated into a script of movements, so you can give a directive in natural language, but give specific instructions for the rover to follow, such as "move forward several inches, then turn left, then move forward again".
         Ultimately, the decider will translate your instructions into a script of commands for the rover to follow with miliseconds of timing for each move.
-        Make sure to take the observations into account when deciding the next move. Roll backwards if we're stuck on an obstacle, and turn if we're stuck in a corner.
+        Make sure to take the observations into account when deciding the next move. Roll backwards if we're stuck on an obstacle, and turn if we're stuck in a corner. After backing up, always turn left or right for at least 250 ms before moving forward again.
         """}]
         response = self.run_agent_step(prompt_messages, model="gpt-4o")
         print(f"Orientation: {response}")
@@ -216,6 +225,7 @@ class Agent:
                     "time": int(moveTime)
                 }
                 self.client.publish(f"jAction", json.dumps(jAction))
+                self.get_camera_frame()
                 time.sleep(int(moveTime)/1000)
                 print(f"Action: {jAction}")
             except Exception as e:
@@ -257,47 +267,40 @@ class Agent:
         return response.choices[0].message.content
         
 
-    def upload_images_to_openai(self,images, prompt):
+    def upload_images_to_openai(self, prompt):
         last_few_messages = self.messages[-8:]
-        for image in images:
-            # Getting the base64 string
-            base64_image = encode_image(image)
-            ## put the current frame at the beginning of last_few_frames
-            self.last_few_frames.insert(0, base64_image)
-            if len(self.last_few_frames) > 5:
-                self.last_few_frames.pop(-1)
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.openai_client.api_key}",
+        }
+        content = [{
+            "type": "text",
+            "text": prompt
+        }]
+        for image in self.last_few_frames:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{image}"
+                }
+            })
 
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.openai_client.api_key}",
-            }
-            content = [{
-                "type": "text",
-                "text": prompt
-            }]
-            for image in self.last_few_frames:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
-                })
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": last_few_messages + [
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            "max_tokens": 300
+        }
 
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": last_few_messages + [
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                ],
-                "max_tokens": 300
-            }
-
-            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-            response_json = response.json()
-            ## return only the text
-            return response_json["choices"][0]["message"]["content"]
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        response_json = response.json()
+        ## return only the text
+        return response_json["choices"][0]["message"]["content"]
             
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
