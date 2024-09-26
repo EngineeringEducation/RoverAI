@@ -4,12 +4,12 @@ from openai import OpenAI
 import os
 import base64
 import requests
+import cv2
+import time
 
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 RMTP=os.getenv("RMTP")
-import cv2
-import time
 
 list_of_found_items = []
 found_items_filepath = "found_items.jsonl"

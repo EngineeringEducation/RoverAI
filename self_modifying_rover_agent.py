@@ -90,7 +90,7 @@ class Agent:
         response = self.openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1000,
+            max_tokens=2000,
         )
         generated_code = response.choices[0].message.content
         
