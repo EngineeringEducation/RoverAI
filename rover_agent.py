@@ -1,194 +1,516 @@
-import paho.mqtt.client as mqtt
-import json
-from openai import OpenAI
+from pydantic import BaseModel
 import os
+import time
+import asyncio
+import signal
+import sys
+import cv2
+import paho.mqtt.client as mqtt
+from loguru import logger
+from peewee import SqliteDatabase, Model, TextField, IntegrityError, DateTimeField
+from tenacity import retry, wait_exponential, stop_after_attempt
+from transitions import Machine
+from prometheus_client import start_http_server, Summary, Counter
+from textwrap import dedent
+import functools
 import base64
-import requests
+import threading
+from contextlib import contextmanager
+from openai import OpenAI
 
+# Configure loguru logger
+logger.remove()
+logger.add("rover.log", rotation="10 MB", level="INFO")
+logger.add(sys.stdout, level="INFO")
+
+# Environment variables and constants
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
-RMTP=os.getenv("RMTP")
-import cv2
-import time
+MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
+RTMP_URL = os.getenv("RTMP_URL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-list_of_found_items = []
-found_items_filepath = "found_items.jsonl"
+# File paths
+DATABASE_PATH = os.getenv("DATABASE_PATH", "rover.db")
+OLD_FRAMES_DIR = os.getenv("OLD_FRAMES_DIR", "old_frames")
+ROVER_IMAGE_PATH = os.getenv("ROVER_IMAGE_PATH", "rover.jpg")
+BACKUP_DATABASE_PATH = os.getenv("BACKUP_DATABASE_PATH", "rover_backup.db")
+
+# Ensure the old_frames directory exists
+os.makedirs(OLD_FRAMES_DIR, exist_ok=True)
+
+# Metrics
+REQUEST_TIME = Summary("request_processing_seconds", "Time spent processing request")
+OBSERVATIONS = Counter("rover_observations_total", "Total number of observations made")
+ACTIONS = Counter("rover_actions_total", "Total number of actions performed")
+
+# Initialize Peewee database
+db = SqliteDatabase(DATABASE_PATH)
+
+# Cache size monitoring
+CACHE_SIZE = 128
 
 
-# Function to encode the image
 def encode_image(image_path):
-  with open(image_path, "rb") as image_file:
-    return base64.b64encode(image_file.read()).decode('utf-8')
+    """Encode the image to a base64 string."""
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
 
+
+# Define Pydantic models for structured responses
+class ObservationModel(BaseModel):
+    observation: str
+
+
+class OrientationModel(BaseModel):
+    orientation: str
+
+
+class DecisionModel(BaseModel):
+    decision: str
+
+
+class Item(BaseModel):
+    name: str
+    location: str
+class ItemModel(BaseModel):
+    items: list[Item]
+    
+
+
+
+class BaseModel(Model):
+    class Meta:
+        database = db
+
+
+class Observation(BaseModel):
+    timestamp = DateTimeField()
+    observation = TextField()
+
+
+class Action(BaseModel):
+    timestamp = DateTimeField()
+    action = TextField()
+
+
+class Decision(BaseModel):
+    timestamp = DateTimeField()
+    decision = TextField()
+
+
+class Orientation(BaseModel):
+    timestamp = DateTimeField()
+    orientation = TextField()
+
+
+class Item(BaseModel):
+    timestamp = DateTimeField()
+    items = TextField()
+
+
+class RoverStateMachine:
+    """
+    State machine for managing rover states.
+
+    State Diagram:
+    
+        [idle] --> (start_exploring) --> [exploring]
+        [exploring] --> (detect_obstacle) --> [avoiding_obstacle]
+        [avoiding_obstacle] --> (clear_obstacle) --> [exploring]
+        [*] --> (return_home) --> [returning]
+        [*] --> (stop) --> [idle]
+
+    States:
+        - idle: The rover is not performing any actions.
+        - exploring: The rover is exploring its environment.
+        - avoiding_obstacle: The rover has detected an obstacle and is trying to avoid it.
+        - returning: The rover is returning to its home base.
+
+    Transitions:
+        - start_exploring: Transition from idle to exploring.
+        - detect_obstacle: Transition from exploring to avoiding_obstacle.
+        - clear_obstacle: Transition from avoiding_obstacle to exploring.
+        - return_home: Transition from any state to returning.
+        - stop: Transition from any state to idle.
+    """
+
+    states = ["idle", "exploring", "avoiding_obstacle", "returning"]
+
+    def __init__(self, agent):
+        self.agent = agent
+        self.machine = Machine(
+            model=self, states=RoverStateMachine.states, initial="idle"
+        )
+        self.machine.add_transition(
+            trigger="start_exploring", source="idle", dest="exploring"
+        )
+        self.machine.add_transition(
+            trigger="detect_obstacle", source="exploring", dest="avoiding_obstacle"
+        )
+        self.machine.add_transition(
+            trigger="clear_obstacle", source="avoiding_obstacle", dest="exploring"
+        )
+        self.machine.add_transition(trigger="return_home", source="*", dest="returning")
+        self.machine.add_transition(trigger="stop", source="*", dest="idle")
 
 
 class Agent:
     def __init__(self, agent_name, mqtt_broker, mqtt_port, stream_url):
-        
-        self.stream_url = stream_url
-        self.openai_client = OpenAI()
-        self.openai_client.api_key = os.getenv("OPENAI_API_KEY")
         self.agent_name = agent_name
+        self.stream_url = stream_url
+        self.most_recent_timestamp = None
+        self.last_few_moves = []
+        self.shutdown_event = asyncio.Event()
+        self.db_lock = threading.Lock()
+
+        # Initialize MQTT client
         self.client = mqtt.Client()
         self.client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
-        self.client.connect(mqtt_broker, mqtt_port, 60)
+        self.mqtt_connected = False
+        self.retry_mqtt_connection(mqtt_broker, mqtt_port)
+
+        # Initialize messages for context
         self.messages = [{"role": "system", "content": "Initialize agent"}]
-        self.last_few_moves = []
-        
-        
-    def capture_frames_from_stream(self):
-        self.most_recent_timestamp = time.time()
+
+        # Initialize video capture
         self.cap = cv2.VideoCapture(self.stream_url)
-        # Initialize video capture from the stream URL
         if not self.cap.isOpened():
-            print("Error: Unable to open stream.")
-            return
+            logger.error("Unable to open video stream.")
+            raise RuntimeError("Unable to open video stream.")
+
+        # Initialize database tables
+        with self.db_connection():
+            db.create_tables([Observation, Action, Decision, Orientation, Item])
+
+        # Start metrics server
+        prometheus_port = int(os.getenv("PROMETHEUS_PORT", 8000))
+        start_http_server(prometheus_port)
+
+        # Set up signal handling
+        loop = asyncio.get_event_loop()
         try:
-            ## move the current rover.jpg to the current timestamp.jpg in the /old_frames directory
-            ## then save the current frame as rover.jpg
-            ## this will allow us to keep a history of frames
-            old_frame_filename = f"old_frames/{self.most_recent_timestamp}.jpg"
-            os.rename("rover.jpg", old_frame_filename)
-
-            ret, frame = self.cap.read()
-            if not ret:
-                print("Error: Unable to fetch frame.")
-                return
-
-            # Save the frame as an image file
-            cv2.imwrite(f"rover.jpg", frame)
-            print(f"Captured frame")
-
-
+            loop.add_signal_handler(
+                signal.SIGINT, lambda: asyncio.create_task(self.handle_shutdown())
+            )
+            loop.add_signal_handler(
+                signal.SIGTERM, lambda: asyncio.create_task(self.handle_shutdown())
+            )
         except Exception as e:
-            print(f"Error: {e}")
-            # Release the video capture object
-            print("video capture died")
+            logger.error(f"Failed to set signal handlers: {e}")
+            self.shutdown_event.set()
+
+        # Initialize state machine
+        self.state_machine = RoverStateMachine(self)
+
+        # Backup interval
+        self.backup_interval = 600  # seconds
+        self.last_backup_time = time.time()
+
+    @contextmanager
+    def db_connection(self):
+        """Context manager for database connection."""
+        try:
+            db.connect()
+            yield
         finally:
+            db.close()
+
+    def retry_mqtt_connection(self, mqtt_broker, mqtt_port):
+        """Retry MQTT connection a few times before failing."""
+        for attempt in range(5):
+            try:
+                self.client.connect(mqtt_broker, mqtt_port, 60)
+                self.mqtt_connected = True
+                logger.info("Connected to MQTT broker.")
+                break
+            except Exception as e:
+                logger.error(
+                    f"Failed to connect to MQTT broker (attempt {attempt + 1}): {e}"
+                )
+                time.sleep(2**attempt)
+        if not self.mqtt_connected:
+            logger.error("Failed to connect to MQTT broker after several attempts.")
+            sys.exit(1)
+
+    async def handle_shutdown(self):
+        """Handle shutdown signals."""
+        logger.info("Shutdown signal received. Cleaning up...")
+        self.shutdown_event.set()
+
+    async def run(self):
+        """Main loop to run the agent."""
+        try:
+            while not self.shutdown_event.is_set():
+                observation = await self.observe()
+                orientation = await self.orient(observation)
+                decision = await self.decide(orientation)
+                self.act(decision)
+                await asyncio.to_thread(self.visualize, observation)
+                self.backup_data()
+                await asyncio.sleep(5)  # Sleep to prevent overwhelming the system
+        except asyncio.CancelledError:
+            logger.info("Agent run loop cancelled.")
+        except (RuntimeError, ValueError) as e:
+            logger.error(f"Agent encountered an error: {e}")
+        except cv2.error as e:
+            logger.error(f"OpenCV error: {e}")
+        except mqtt.MQTTException as e:
+            logger.error(f"MQTT error: {e}")
+        finally:
+            self.cleanup()
+
+    def cleanup(self):
+        """Clean up resources."""
+        if self.cap.isOpened():
             self.cap.release()
-            ## reconnect 
-            self.cap = cv2.VideoCapture(self.stream_url)
-            cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
+        with self.db_connection():
+            logger.info("Cleaned up resources.")
 
-    def observe(self):
-        ## here's where the "limbic system" of the agent will live
-        ## which will dial up or down the number of times per minuite we capture an image and send it to openai
-        ## we'll need to add some system prompting and rover logic here
-        ## but also figure out which frame number we're on so we can either capture or not capture a frame
-        # Capture a frame from the Camera stream
-        frame = self.get_camera_frame()  
-        # Analyze the frame using the vision model by sending the image to openai and asking it to interpret what it sees and give directions to the next agent to generate the next move
-        
-        observation = self.upload_images_to_openai([frame], """
-        You are a friendly, playful rover named David Attenbot who is the camera operator in a nature documentary about animals in a domestic setting.
-        Your visual point of view is third-person, but please think out loud in the first person. 
-        What do you see? 
-        Your response should help the next agent to generate the next move for the rover you are riding on. 
-        Please also make a short list of all objects that you see, for inventory purposes. 
-        Don't list walls, doors, or other parts of the building, only objects that would be inventoried in a super cool factory or maker space, like tools or parts, or cat toys, or any animals you see. 
-        In your response, do note if we're facing a wall, or an obstacle, and direct the next agent to turn left or right, based on the image. 
-        Don't list the wall in the list of objects, only give directions to the next agent, so that it can properly turn if need be. 
-        If you seem to be in a corner, suggest reversing course. You are small, so you can probabaly fit in small spaces, so don't worry if an obstacle is far away, only if you're only a few inches from it.
-        Try not to knock things over, but feel free to get close, especially if the object is interesting.
-        """)
-        print(f"Observation: {observation}")
-        ## log observations based on this timestamp 
-        with open("observations.jsonl", "a") as f:
-            f.write((str(self.most_recent_timestamp) + "|" + observation + "\n"))
+    @REQUEST_TIME.time()
+    async def observe(self):
+        """Observe the environment by capturing an image and analyzing it."""
+        OBSERVATIONS.inc()
+        try:
+            await self.capture_frame()
+            observation = await self.analyze_image(ROVER_IMAGE_PATH)
+            logger.info(f"Observation: {observation}")
+            self.save_to_db(Observation, observation=observation)
+            await self.extract_items(observation)
+            # State transition based on observation
+            if "obstacle" in observation.lower():
+                self.state_machine.detect_obstacle()
+            else:
+                self.state_machine.start_exploring()
+            return observation
+        except Exception as e:
+            logger.error(f"Observation failed: {e}")
+            return "No observation could be made."
 
-        self.extract_items(observation)
-        # self.messages.append({"role": "assistant", "content": observation})
-        return observation
+    @retry(
+        wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(5)
+    )
+    async def capture_frame(self):
+        """Capture a frame from the video stream and save it."""
+        ret, frame = await asyncio.to_thread(self.cap.read)
+        if not ret:
+            logger.error("Failed to read frame from video stream.")
+            raise RuntimeError("Failed to read frame from video stream.")
 
-    def extract_items(self,observation):
-        ## send a call to openai to extract the items from the observation
-        ## then save the items to a file
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Extract items listed from the observation, so we can keep track of these items in inventory. Reply with JSON."
-                },
+        try:
+            self.most_recent_timestamp = time.time()
+            old_frame_filename = os.path.join(
+                OLD_FRAMES_DIR, f"{self.most_recent_timestamp}.jpg"
+            )
+
+            # Move current rover.jpg to old_frames directory
+            if os.path.exists(ROVER_IMAGE_PATH):
+                os.rename(ROVER_IMAGE_PATH, old_frame_filename)
+                logger.debug(f"Moved old frame to {old_frame_filename}")
+
+            # Save the new frame
+            await asyncio.to_thread(cv2.imwrite, ROVER_IMAGE_PATH, frame)
+            logger.info("Captured new frame.")
+        except Exception as e:
+            logger.error(f"Failed to process captured frame: {e}")
+            raise RuntimeError("Failed to process captured frame.")
+
+    @functools.lru_cache(maxsize=CACHE_SIZE)
+    @retry(
+        wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(5)
+    )
+    async def analyze_image(self, image_path):
+        """Analyze the captured image using OpenAI's API."""
+        prompt = dedent(
+            """
+        You are a friendly, playful rover named David Attenbot who is the camera 
+        operator in a nature documentary about animals in a domestic setting. Your 
+        visual point of view is third-person, but please think out loud in the first 
+        person. What do you see? Your response should help the next agent to generate 
+        the next move for the rover you are riding on. Please also make a short list 
+        of all objects that you see, for inventory purposes. Don't list walls, doors, 
+        or other parts of the building, only objects that would be inventoried in a 
+        super cool factory or maker space, like tools or parts, or cat toys, or any 
+        animals you see. In your response, do note if we're facing a wall, or an 
+        obstacle, and direct the next agent to turn left or right, based on the image. 
+        Don't list the wall in the list of objects, only give directions to the next 
+        agent, so that it can properly turn if need be. If you seem to be in a corner, 
+        suggest reversing course. You are small, so you can probably fit in small 
+        spaces, so don't worry if an obstacle is far away, only if you're only a few 
+        inches from it. Try not to knock things over, but feel free to get close, 
+        especially if the object is interesting.
+        """
+        )
+        try:
+            # Read and encode the image
+            encoded_image = encode_image(image_path)
+            messages = self.messages[-8:] + [
                 {
                     "role": "user",
-                    "content": observation
+                    "content": prompt
+                    + f"\n![image](data:image/jpeg;base64,{encoded_image})",
                 }
-            ],
-            max_tokens=300,
-            response_format={"type": "json_object"}
-        )
-        items = response.choices[0].message.content
-        ## print(f"Items: {items}")
-        ## append
-        with open(found_items_filepath, "a") as f:
-            f.write((str(self.most_recent_timestamp) + "|" + items + "\n"))
+            ]
+            client = OpenAI()
+            response = await client.beta.chat.completions.parse(
+                model="gpt-4o-2024-08-06",
+                messages=messages,
+                response_format=ObservationModel,
+            )
+            message = response.choices[0].message
+            if message.parsed:
+                observation = message.parsed.observation
+                return observation
+            else:
+                logger.error(f"Image analysis refusal: {message.refusal}")
+                return "No observation could be made."
+        except Exception as e:
+            logger.error(f"Image analysis failed: {e}")
+            raise
 
-    def orient(self, observation):
-        ## #todo a lot of the business logic of deciding what the next move should be
-        ## in relation to the goals of the agent will live here
-        ## we'll need to add some system prompting and rover logic here
-        # Process observation data using gpt4-o-mini
-        prompt_messages = self.messages + [{"role": "user", "content": f"""
-        {observation}
-        Please interpret what the vision model saw, and give a description of the plan for what to do next. 
-        Try to avoid getting stuck in corners, and if you can't seem to roll forward, turn. Here's what the vision model saw and thought: {observation}
-        Try to avoid going in circles - your goal is to explore the house, so make sure you're moving forward and not just turning around in circles.
-        Don't be overly cautious, as this will cause the rover to end up going in circles to avoid obstacles too often.
-        Encourage the rover to move forward as often as possible, and to turn only when necessary, or if stuck.
-        You may need to get closer to a wall in order to move into a position where you can go forward. 
-        Don't worry about running into obstacles, you can touch them if needed.
-        You are currently trapped in a hallway, your job is to escape the hallway and explore the house.
-        You are the camera person in a nature documentary about any animals you see, so try to keep any animals in the camera frame using your movements. If you don't see any animals, try to find some! 
-        Your last few moves were : {",".join(self.last_few_moves)}
-        If you find yourself turning left, then right, then left again, you've gotten caught in a loop. Try moving forward.
-        Reply only with the next move, as your response will be interpreted and if you respond with more than one move, the rover may get confused.
-        Make sure to take the observations into account when deciding the next move. Roll backwards if we're stuck on an obstacle, and turn if we're stuck in a corner.
-        """}]
-        response = self.run_agent_step(prompt_messages, model="gpt-4o")
-        print(f"Orientation: {response}")
-        with open("orientations.jsonl", "a") as f:
-            f.write((str(self.most_recent_timestamp) + "|" + response + "\n"))
-        ## save the orientation in recent memory
-        self.messages.append({"role": "user", "content": response})
-        return response
+    async def extract_items(self, observation):
+        """Extract items from the observation for inventory purposes."""
+        try:
+            prompt = f"""
+Extract items listed from the observation for inventory purposes.
+Reply with a JSON array of items.
+Observation: "{observation}"
+"""
+            client = OpenAI()
+            response = await client.beta.chat.completions.parse(
+                model="gpt-4o-2024-08-06",
+                messages=[{"role": "user", "content": prompt}],
+                response_format=ItemModel,
+            )
+            message = response.choices[0].message
+            if message.parsed:
+                items = message.parsed.items
+                logger.debug(f"Extracted items: {items}")
+                # Save items to database
+                self.save_to_db(Item, items=items)
+            else:
+                logger.error(f"Item extraction refusal: {message.refusal}")
+        except Exception as e:
+            logger.error(f"Failed to extract items: {e}")
 
-    def decide(self, orientation):
-        # Decide the action based on the orientation
-        prompt_messages = self.messages + [{"role": "user", "content": f"""
-            Orientation Agent says to: {orientation}
-            Given the observation and orientation, what should the next move be? Do not always choose Forward, as the rover may need to turn or go backward to avoid obstacles.
-            You have the following options for what to do next, please only extract what the orientation says to do next:
-            "hold",
-            "forward",
-            "backward",
-            "left",
-            "slightLeft",
-            "right",
-            "slightRight",
-            "superForward",
-            "superRight",
-            "superLeft",
-            "superBackward",
-            "aux",
-            "shoot",
-            "turnaround"
-            Please reply with one of these strings only, exactly, with no other text.
-        """}]
-        decision = self.run_agent_step(prompt_messages, model="gpt-4o-mini")
-        print(f"Decision: {decision}")
-        self.last_few_moves.append(decision)
-        if len(self.last_few_moves) > 20:
-            self.last_few_moves.pop(0)
-        with open("decisions.jsonl", "a") as f:
-            f.write((str(self.most_recent_timestamp) + "|" + decision + "\n"))
+    async def orient(self, observation):
+        """Process the observation and determine the orientation."""
+        try:
+            prompt = dedent(
+                f"""
+                Please interpret what the vision model saw, and give a description 
+                of the plan for what to do next. Try to avoid getting stuck in 
+                corners, and if you can't seem to roll forward, turn. Here's what 
+                the vision model saw and thought: {observation} Try to avoid going 
+                in circles - your goal is to explore the house, so make sure you're 
+                moving forward and not just turning around in circles. Don't be 
+                overly cautious, as this will cause the rover to end up going in 
+                circles to avoid obstacles too often. Encourage the rover to move 
+                forward as often as possible, and to turn only when necessary, or 
+                if stuck. You may need to get closer to a wall in order to move 
+                into a position where you can go forward. Don't worry about running 
+                into obstacles, you can touch them if needed. You are currently 
+                trapped in a hallway; your job is to escape the hallway and explore 
+                the house. You are the camera person in a nature documentary about 
+                any animals you see, so try to keep any animals in the camera frame 
+                using your movements. If you don't see any animals, try to find 
+                some! Your last few moves were: {', '.join(self.last_few_moves)} If 
+                you find yourself turning left, then right, then left again, you've 
+                gotten caught in a loop. Try moving forward. Reply only with the 
+                next move, as your response will be interpreted and if you respond 
+                with more than one move, the rover may get confused. Make sure to 
+                take the observations into account when deciding the next move. 
+                Roll backwards if we're stuck on an obstacle, and turn if we're 
+                stuck in a corner.
+            """
+            )
+            messages = self.messages + [{"role": "user", "content": prompt}]
+            client = OpenAI()
+            response = await client.beta.chat.completions.parse(
+                model="gpt-4o-2024-08-06",
+                messages=messages,
+                response_format=OrientationModel,
+            )
+            message = response.choices[0].message
+            if message.parsed:
+                orientation = message.parsed.orientation
+                logger.info(f"Orientation: {orientation}")
+                self.save_to_db(Orientation, orientation=orientation)
+                self.messages.append({"role": "assistant", "content": orientation})
+                if len(self.messages) > 100:
+                    self.messages.pop(0)
+                return orientation
+            else:
+                logger.error(f"Orientation refusal: {message.refusal}")
+                return "Unable to determine orientation."
+        except Exception as e:
+            logger.error(f"Orientation failed: {e}")
+            return "Unable to determine orientation."
+
+    async def decide(self, orientation):
+        """Decide the next action based on the orientation."""
+        try:
+            if self.state_machine.state == "avoiding_obstacle":
+                # If avoiding obstacle, decide on a turn or move backward
+                decision = self.decide_avoidance_action()
+            else:
+                prompt = dedent(
+                    f"""Based on the following orientation, 
+                decide the next action for the rover.
+                Orientation: "{orientation}"
+                """
+                )
+                client = OpenAI()
+                response = await client.beta.chat.completions.parse(
+                    model="gpt-4o-2024-08-06",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format=DecisionModel,
+                )
+                message = response.choices[0].message
+                if message.parsed:
+                    decision = message.parsed.decision
+                    logger.info(f"Decision: {decision}")
+                    self.save_to_db(Decision, decision=decision)
+                    self.last_few_moves.append(decision)
+                    if len(self.last_few_moves) > 20:
+                        self.last_few_moves.pop(0)
+                    # If the rover is avoiding an obstacle,
+                    # check if it should clear the obstacle
+                    if self.state_machine.state == "avoiding_obstacle" and decision in [
+                        "forward",
+                        "superForward",
+                    ]:
+                        self.state_machine.clear_obstacle()
+                else:
+                    logger.error(f"Decision refusal: {message.refusal}")
+                    decision = "hold"
+        except Exception as e:
+            logger.error(f"Decision making failed: {e}")
+            decision = "hold"
         return decision
 
+    def decide_avoidance_action(self):
+        """Decide the next action to avoid an obstacle."""
+        # Simple logic to alternate between turning left and right
+        if not self.last_few_moves or self.last_few_moves[-1] in [
+            "right",
+            "superRight",
+        ]:
+            return "left"
+        else:
+            return "right"
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(5),
+    )
     def act(self, decision):
-        # Extract the command from decision
-        action = {
+        """Perform the action decided upon."""
+        ACTIONS.inc()
+        action_map = {
             "hold": "h",
-            "go": "g",
             "forward": "f",
             "backward": "b",
             "left": "l",
@@ -200,92 +522,54 @@ class Agent:
             "aux": "x",
             "shoot": "z",
             "turnaround": "t",
-            "slightLeft": '{ "move": "l", "time": 150}',
-            "slightRight": '{ "move": "r", "time": 150}',
+            "slightLeft": "l_short",
+            "slightRight": "r_short",
         }
-        if decision == "slightLeft" or decision == "slightRight":
-            self.client.publish(f"jAction", action.get(decision,"h"))
+        command = action_map.get(decision, "h")
+        topic = "jAction" if decision in ["slightLeft", "slightRight"] else "action"
 
-        else:
-            # Send command to the rover
-            self.client.publish(f"action", action.get(decision,"h"))
-        print(f"Action: {action.get(decision)}")
-        with open("actions.jsonl", "a") as f:
-            f.write((str(self.most_recent_timestamp) + "|" + action.get(decision) + "\n"))
-        return False
+        try:
+            self.client.publish(topic, command)
+            logger.info(f"Action performed: {command} on topic {topic}")
+            self.save_to_db(Action, action=command)
+        except Exception as e:
+            logger.error(f"Failed to perform action: {e}")
 
-    def run(self):
-        exit_loop = False
-        while not exit_loop:
-            environment_data = self.observe()
-            orientation = self.orient(environment_data)
-            decision = self.decide(orientation)
-            exit_loop = self.act(decision)
-            ## make the rover sleep for 5 seconds
-            time.sleep(5)
+    def save_to_db(self, model_class, **data):
+        """Save data to the database using Peewee ORM."""
+        with self.db_lock:
+            try:
+                model_class.create(timestamp=self.most_recent_timestamp, **data)
+            except IntegrityError as e:
+                logger.error(f"Database integrity error: {e}")
 
-    def get_camera_frame(self):
+    def visualize(self, observation):
+        """Visualize the captured image with overlays."""
+        try:
+            frame = cv2.imread(ROVER_IMAGE_PATH)
+            # Overlay observation text on the image
+            cv2.putText(
+                frame,
+                observation[:100],
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                2,
+            )
+            cv2.imshow("Rover View", frame)
+            cv2.waitKey(1)
+        except Exception as e:
+            logger.error(f"Visualization failed: {e}")
 
-        ## read rover.png
-        output_filename = "rover.jpg"
-        self.capture_frames_from_stream()
+    def backup_data(self):
+        """Backup the database periodically."""
+        current_time = time.time()
+        if current_time - self.last_backup_time > self.backup_interval:
+            with self.db_lock:
+                with self.db_connection():
+                    import shutil
 
-        return output_filename
-
-    def run_agent_step(self, messages, max_tokens=300, model="gpt-4o-mini"):
-        print(len(messages), " messages in context")
-        if len(messages) > 50:
-            messages = messages[1:]
-
-        response = self.openai_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-        )
-        # print(response.choices[0].message)
-        return response.choices[0].message.content
-        
-
-    def upload_images_to_openai(self,images, prompt):
-        last_few_messages = self.messages[-8:]
-        for image in images:
-            # Getting the base64 string
-            base64_image = encode_image(image)
-
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.openai_client.api_key}",
-            }
-
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": last_few_messages + [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                "max_tokens": 300
-            }
-
-            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-            response_json = response.json()
-            ## return only the text
-            return response_json["choices"][0]["message"]["content"]
-            
-MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
-MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
-# Example usage
-agent = Agent("Rover1", MQTT_BROKER, MQTT_PORT, RMTP)
-agent.run()
+                    shutil.copy(DATABASE_PATH, BACKUP_DATABASE_PATH)
+                    self.last_backup_time = current_time
+                    logger.info("Database backed up successfully.")
